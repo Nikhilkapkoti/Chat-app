@@ -4,7 +4,7 @@ import { getDatabase } from "@/lib/mongodb"
 
 export async function GET(req: NextRequest) {
   try {
-   const { userId } = await auth();
+    const { userId } = await auth();
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
@@ -18,16 +18,30 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Room ID required" }, { status: 400 })
     }
 
+    console.log(`Loading messages for room: ${roomId}`)
+
     const db = await getDatabase()
     const messages = await db
       .collection("messages")
       .find({ roomId })
-      .sort({ timestamp: -1 })
+      .sort({ timestamp: 1 }) // Sort by timestamp ascending (oldest first)
       .skip((page - 1) * limit)
       .limit(limit)
       .toArray()
 
-    return NextResponse.json({ messages: messages.reverse() })
+    // Convert ObjectId to string for JSON serialization
+    const serializedMessages = messages.map((msg) => ({
+      ...msg,
+      _id: msg._id.toString(),
+      timestamp: msg.timestamp.toISOString(),
+    }))
+
+    console.log(`Found ${serializedMessages.length} messages for room ${roomId}`)
+
+    return NextResponse.json({
+      messages: serializedMessages,
+      count: serializedMessages.length,
+    })
   } catch (error) {
     console.error("Error fetching messages:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
